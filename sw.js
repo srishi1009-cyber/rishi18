@@ -1,12 +1,12 @@
-// ============================================================
-// RISHI MUSIC - SERVICE WORKER (VERSION 4)
-// ============================================================
+"use strict";
 
-const CACHE_NAME = "rishi-music-v4";
+/* ============================================================
+   RISHI MUSIC - SERVICE WORKER
+   Version 5
+   GitHub Pages: /rishi18/
+   ============================================================ */
 
-// ============================================================
-// FILES TO CACHE (APP SHELL)
-// ============================================================
+const CACHE_NAME = "rishi-music-v5";
 
 const APP_SHELL = [
     "./",
@@ -16,142 +16,191 @@ const APP_SHELL = [
     "./manifest.json"
 ];
 
-// ============================================================
-// INSTALL
-// ============================================================
+/* ============================================================
+   INSTALL
+   ============================================================ */
 
 self.addEventListener("install", (event) => {
-    console.log("[Rishi Music SW] Installing v4...");
-
     event.waitUntil(
-        caches.open(CACHE_NAME)
-            .then((cache) => {
-                console.log("[Rishi Music SW] Caching app shell...");
-                return cache.addAll(APP_SHELL);
-            })
-            .then(() => self.skipWaiting())
+        (async () => {
+            const cache = await caches.open(CACHE_NAME);
+
+            for (const file of APP_SHELL) {
+                try {
+                    const response = await fetch(file, {
+                        cache: "reload"
+                    });
+
+                    if (response.ok) {
+                        await cache.put(file, response);
+                    } else {
+                        console.warn(
+                            "[Rishi Music] Could not cache:",
+                            file,
+                            response.status
+                        );
+                    }
+                } catch (error) {
+                    console.warn(
+                        "[Rishi Music] Cache failed:",
+                        file,
+                        error
+                    );
+                }
+            }
+
+            await self.skipWaiting();
+        })()
     );
 });
 
-// ============================================================
-// ACTIVATE (PURGE OLD CACHES)
-// ============================================================
+/* ============================================================
+   ACTIVATE
+   ============================================================ */
 
 self.addEventListener("activate", (event) => {
-    console.log("[Rishi Music SW] Activating v4...");
-
     event.waitUntil(
-        caches.keys()
-            .then((cacheNames) => {
-                return Promise.all(
-                    cacheNames.map((cacheName) => {
-                        if (
-                            cacheName.startsWith("rishi-music-") &&
-                            cacheName !== CACHE_NAME
-                        ) {
-                            console.log("[Rishi Music SW] Removing old cache:", cacheName);
-                            return caches.delete(cacheName);
-                        }
-                        return Promise.resolve();
-                    })
-                );
-            })
-            .then(() => self.clients.claim())
+        (async () => {
+            const cacheNames = await caches.keys();
+
+            await Promise.all(
+                cacheNames.map((name) => {
+                    if (
+                        name.startsWith("rishi-music-") &&
+                        name !== CACHE_NAME
+                    ) {
+                        return caches.delete(name);
+                    }
+
+                    return Promise.resolve();
+                })
+            );
+
+            await self.clients.claim();
+
+            console.log("[Rishi Music] Service worker activated.");
+        })()
     );
 });
 
-// ============================================================
-// FETCH
-// ============================================================
+/* ============================================================
+   FETCH
+   ============================================================ */
 
 self.addEventListener("fetch", (event) => {
     const request = event.request;
 
-    // 1. Only intercept GET requests
-    if (request.method !== "GET") return;
+    if (request.method !== "GET") {
+        return;
+    }
 
-    // 2. DO NOT intercept Audio/Video media or Range requests (prevents playback freezes)
+    const url = new URL(request.url);
+
+    // Never intercept requests to other origins.
+    if (url.origin !== self.location.origin) {
+        return;
+    }
+
+    // Let the browser handle audio, video, and byte-range requests.
     if (
         request.destination === "audio" ||
         request.destination === "video" ||
         request.headers.has("range")
     ) {
-        return; // Allow native browser audio pipeline to handle byte-streaming directly
-    }
-
-    const url = new URL(request.url);
-
-    // 3. Do not interfere with external origins or blob schemes
-    if (url.origin !== self.location.origin || url.protocol === "blob:") {
         return;
     }
 
-    // 4. HTML Documents: Network first, fallback to cached index.html
-    if (request.mode === "navigate" || request.destination === "document") {
-        event.respondWith(
-            fetch(request)
-                .then((response) => {
-                    if (response && response.status === 200) {
-                        const copy = response.clone();
-                        caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-                    }
-                    return response;
-                })
-                .catch(() => {
-                    return caches.match(request).then((cached) => {
-                        return cached || caches.match("./index.html");
-                    });
-                })
-        );
-        return;
-    }
-
-    // 5. App Shell Scripts, Styles, and Manifest: Network first, update cache
+    // Handle page navigation.
     if (
-        request.destination === "script" ||
-        request.destination === "style" ||
-        request.destination === "manifest"
+        request.mode === "navigate" ||
+        request.destination === "document"
     ) {
         event.respondWith(
-            fetch(request)
-                .then((response) => {
-                    if (response && response.status === 200) {
-                        const copy = response.clone();
-                        caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+            (async () => {
+                try {
+                    const response = await fetch(request);
+
+                    if (response.ok) {
+                        const cache = await caches.open(CACHE_NAME);
+
+                        await cache.put(
+                            "./index.html",
+                            response.clone()
+                        );
                     }
+
                     return response;
-                })
-                .catch(() => caches.match(request))
+                } catch (error) {
+                    const cachedPage = await caches.match(
+                        "./index.html"
+                    );
+
+                    if (cachedPage) {
+                        return cachedPage;
+                    }
+
+                    return new Response(
+                        "Rishi Music is offline. Please open the app once while connected to the internet.",
+                        {
+                            status: 503,
+                            headers: {
+                                "Content-Type": "text/plain; charset=utf-8"
+                            }
+                        }
+                    );
+                }
+            })()
         );
+
         return;
     }
 
-    // 6. Static assets (Images, Icons, Fonts): Cache first, fallback to network
+    // Cache-first strategy for app files.
     event.respondWith(
-        caches.match(request).then((cachedResponse) => {
-            if (cachedResponse) return cachedResponse;
+        (async () => {
+            const cachedResponse = await caches.match(request);
 
-            return fetch(request).then((response) => {
-                if (
-                    response &&
-                    response.status === 200 &&
-                    response.type === "basic"
-                ) {
-                    const copy = response.clone();
-                    caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+            if (cachedResponse) {
+                return cachedResponse;
+            }
+
+            try {
+                const response = await fetch(request);
+
+                if (response.ok && response.type === "basic") {
+                    const cache = await caches.open(CACHE_NAME);
+
+                    await cache.put(
+                        request,
+                        response.clone()
+                    );
                 }
+
                 return response;
-            });
-        })
+            } catch (error) {
+                return new Response(
+                    "This resource is unavailable offline.",
+                    {
+                        status: 503,
+                        headers: {
+                            "Content-Type": "text/plain; charset=utf-8"
+                        }
+                    }
+                );
+            }
+        })()
     );
 });
 
-// ============================================================
-// MESSAGE HANDLER
-// ============================================================
+/* ============================================================
+   MESSAGE HANDLER
+   ============================================================ */
 
 self.addEventListener("message", (event) => {
-    if (event.data && event.data.type === "SKIP_WAITING") {
+    if (
+        event.data &&
+        event.data.type === "SKIP_WAITING"
+    ) {
         self.skipWaiting();
     }
 });
