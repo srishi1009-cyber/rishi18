@@ -5,7 +5,7 @@
 
     <meta
         name="viewport"
-        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+        content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     >
 
     <meta name="theme-color" content="#071a3d">
@@ -24,8 +24,14 @@
 
     <title>Rishi Music</title>
 
+    <!-- Stylesheet -->
     <link rel="stylesheet" href="./style.css">
+
+    <!-- PWA Manifest -->
     <link rel="manifest" href="./manifest.json">
+
+    <!-- Optional browser icon: uses a local file if available -->
+    <link rel="icon" href="./icon-192.png" type="image/png">
 
 </head>
 
@@ -34,17 +40,14 @@
     <div class="app-container">
 
         <!-- =====================================
-             SIDEBAR / MOBILE HEADER
+             SIDEBAR / APP BRAND
         ====================================== -->
 
         <aside class="sidebar">
 
             <div class="brand">
-
                 <h1>♫ RISHI MUSIC</h1>
-
                 <p>Personal Audio Hub</p>
-
             </div>
 
             <!-- IMPORT MUSIC -->
@@ -58,11 +61,12 @@
                     id="audioFileInput"
                     accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.opus,.flac,.3gp,.amr"
                     multiple
+                    aria-label="Import music files"
                 >
 
             </label>
 
-            <!-- MUSIC DIRECTOR FILTER -->
+            <!-- PLAYLIST / MUSIC DIRECTOR FILTER -->
 
             <div class="filter-group">
 
@@ -71,9 +75,7 @@
                 </label>
 
                 <select id="directorFilter">
-
                     <option value="all">All</option>
-
                 </select>
 
             </div>
@@ -89,9 +91,7 @@
 
             <header class="top-nav">
 
-                <h2 id="viewTitle">
-                    All Songs
-                </h2>
+                <h2 id="viewTitle">All Songs</h2>
 
                 <input
                     type="search"
@@ -119,11 +119,13 @@
                 class="song-list"
                 id="songListContainer"
                 aria-label="Music library"
+                aria-live="polite"
             >
 
                 <div class="empty-library">
-                    Your music library is ready.
-                    Import songs to begin.
+                    <p>♫</p>
+                    <h3>Your music library is ready</h3>
+                    <p>Tap Import Track to add your favourite songs.</p>
                 </div>
 
             </section>
@@ -137,7 +139,7 @@
 
         <footer class="player-bar">
 
-            <!-- CURRENT TRACK -->
+            <!-- CURRENT SONG INFORMATION -->
 
             <div class="meta-box">
 
@@ -159,7 +161,7 @@
             </div>
 
 
-            <!-- PLAYBACK BUTTONS -->
+            <!-- PLAYBACK CONTROLS -->
 
             <div class="controls-box">
 
@@ -196,7 +198,7 @@
             </div>
 
 
-            <!-- PLAYBACK PROGRESS -->
+            <!-- SONG PROGRESS -->
 
             <div class="slider-box">
 
@@ -230,6 +232,27 @@
         preload="auto"
         playsinline
     ></audio>
+
+
+    <!-- =====================================
+         SERVICE WORKER REGISTRATION
+         Supports offline caching when sw.js
+         is configured correctly.
+    ====================================== -->
+
+    <script>
+        if ("serviceWorker" in navigator) {
+            window.addEventListener("load", function () {
+                navigator.serviceWorker.register("./sw.js")
+                    .catch(function (error) {
+                        console.error(
+                            "Service worker registration failed:",
+                            error
+                        );
+                    });
+            });
+        }
+    </script>
 
 
     <!-- =====================================
